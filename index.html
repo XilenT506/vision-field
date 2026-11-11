@@ -2,41 +2,188 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, {{user}}-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Vision Field</title>
     <style>
         :root {
-            --bg-color: #050505;
-            --color-a: #FF3B30;
-            --color-b: #0A84FF;
-            --color-c: #FFD60A;
-            --color-d: #FF2D95;
-            --color-pbq: #00FFFF;
+            color-scheme: dark;
+            --background: #050505;
+            --accent: #00ffff;
         }
-        body, html {
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            background-color: var(--bg-color); color: white;
-            font-family: -apple-system, system-ui, sans-serif;
-            overflow: hidden; touch-action: none;
+
+        body {
+            margin: 0;
+            background: var(--background);
+            color: white;
+            font-family: system-ui, sans-serif;
         }
-        #app-container { 
-            position: relative; width: 100vw; height: 100vh; 
-            display: flex; align-items: center; justify-content: center; 
+
+        #app-container {
+            position: relative;
+            display: grid;
+            place-items: center;
+            min-height: 100vh;
+            min-height: 100dvh;
         }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        button {
+            font: inherit;
+            cursor: pointer;
+        }
+
+        button:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 4px;
+        }
+
         #trigger-dot {
-            width: 10px; height: 10px; background: #222; border-radius: 50%; cursor: pointer;
+            display: grid;
+            place-items: center;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            border: 0;
+            border-radius: 50%;
+            background: transparent;
         }
-        #progress-bar { position: absolute; top: 0; left: 0; height: 4px; background: var(--color-pbq); width: 0%; transition: width 0.3s linear; z-index: 100; }
-        .answer-block { position: absolute; width: 40%; height: 40%; opacity: 0; transition: opacity 0.3s ease-in; display: flex; align-items: center; justify-content: center; font-size: 80pt; font-weight: bold; pointer-events: none; }
-        .top-left { top: 0; left: 0; color: var(--color-a); }
-        .top-right { top: 0; right: 0; color: var(--color-b); }
-        .bottom-left { bottom: 0; left: 0; color: var(--color-c); }
-        .bottom-right { bottom: 0; right: 0; color: var(--color-d); }
-        #pbq-border { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 8px solid var(--color-pbq); opacity: 0; pointer-events: none; box-sizing: border-box; transition: opacity 0.2s; }
-        #camera-stream { position: absolute; width: 1px; height: 1px; opacity: 0; }
-        #setup-menu { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            background: #111; border: 1px solid #333; padding: 20px; border-radius: 12px; 
-            display: none; z-index:
+
+        #trigger-dot::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #888;
+        }
+
+        #progress-bar {
+            position: absolute;
+            inset: 0 0 auto;
+            width: 100%;
+            height: 4px;
+            appearance: none;
+            border: 0;
+            background: #222;
+            accent-color: var(--accent);
+        }
+
+        #progress-bar::-webkit-progress-bar {
+            background: #222;
+        }
+
+        #progress-bar::-webkit-progress-value {
+            background: var(--accent);
+        }
+
+        #progress-bar::-moz-progress-bar {
+            background: var(--accent);
+        }
+
+        #answers {
+            position: absolute;
+            inset: 12px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-rows: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .answer-block {
+            border: 1px solid #333;
+            border-radius: 12px;
+            background: transparent;
+            font-size: clamp(2rem, 14vmin, 6rem);
+            font-weight: bold;
+        }
+
+        .answer-block:hover {
+            background: #151515;
+        }
+
+        .answer-block:nth-child(1) { color: #ff3b30; }
+        .answer-block:nth-child(2) { color: #0a84ff; }
+        .answer-block:nth-child(3) { color: #ffd60a; }
+        .answer-block:nth-child(4) { color: #ff2d95; }
+
+        #result {
+            box-sizing: border-box;
+            width: min(22rem, calc(100% - 2rem));
+            padding: 1.5rem;
+            border: 1px solid #333;
+            border-radius: 12px;
+            background: #111;
+            text-align: center;
+        }
+
+        #result-text {
+            margin: 0 0 1rem;
+        }
+
+        #restart {
+            min-height: 44px;
+            padding: 0.5rem 1rem;
+            border: 1px solid #555;
+            border-radius: 8px;
+            background: #222;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <main id="app-container" aria-label="Vision Field">
+        <progress id="progress-bar" max="1" value="0" aria-label="Session progress" hidden></progress>
+
+        <button id="trigger-dot" type="button" aria-label="Start session"></button>
+
+        <div id="answers" role="group" aria-label="Choose an answer" hidden>
+            <button class="answer-block" type="button" aria-label="Answer A" value="A">A</button>
+            <button class="answer-block" type="button" aria-label="Answer B" value="B">B</button>
+            <button class="answer-block" type="button" aria-label="Answer C" value="C">C</button>
+            <button class="answer-block" type="button" aria-label="Answer D" value="D">D</button>
+        </div>
+
+        <section id="result" aria-label="Session result" hidden>
+            <h1 id="result-text" tabindex="-1"></h1>
+            <button id="restart" type="button">Start over</button>
+        </section>
+    </main>
+
+    <script>
+        // Standalone demo: start, choose an answer, and reset.
+        const trigger = document.querySelector("#trigger-dot");
+        const progress = document.querySelector("#progress-bar");
+        const answers = document.querySelector("#answers");
+        const result = document.querySelector("#result");
+        const resultText = document.querySelector("#result-text");
+        const restart = document.querySelector("#restart");
+
+        trigger.addEventListener("click", () => {
+            trigger.hidden = true;
+            progress.hidden = false;
+            answers.hidden = false;
+            answers.querySelector("button").focus();
+        });
+
+        answers.querySelectorAll("button").forEach((button) => {
+            button.addEventListener("click", () => {
+                progress.value = 1;
+                answers.hidden = true;
+                resultText.textContent = `You chose ${button.value}`;
+                result.hidden = false;
+                resultText.focus();
+            });
+        });
+
+        restart.addEventListener("click", () => {
+            result.hidden = true;
+            progress.value = 0;
+            progress.hidden = true;
+            trigger.hidden = false;
+            trigger.focus();
+        });
+    </script>
+</body>
+</html>
