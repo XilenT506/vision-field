@@ -375,10 +375,17 @@
                     throw new Error("Gemini reached its rate or usage limit. Try again later.");
                 }
                 if (!response.ok) {
-                    throw new Error(
-                        `Gemini returned HTTP ${response.status}. Check your key and model access.`
-                    );
-                }
+    const body = await response.json().catch(() => null);
+    const status = body?.error?.status;
+    const message = body?.error?.message;
+    const safeMessage = typeof message === "string"
+        ? message.split(key).join("[redacted]")
+        : "Gemini did not provide an error message.";
+
+    throw new Error(
+        `Gemini HTTP ${response.status}${status ? ` (${status})` : ""}. ${safeMessage}`
+    );
+}
 
                 const data = await response.json();
                 const text = data.candidates?.[0]?.content?.parts
