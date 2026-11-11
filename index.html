@@ -1,18 +1,3 @@
-That is exactly what should happen. Vercel is looking for the `index.html` file, but since that file is currently empty (or doesn't exist yet), there is nothing for the website to show.
-
-**Here is the complete code.** 
-
-Follow these steps precisely:
-1. Go back to your **GitHub** page for `vision-field`.
-2. Click on the `index.html` file.
-3. Click the **pencil icon** (Edit this file) in the top right.
-4. **Delete everything** currently in that file.
-5. **Copy and paste the entire block of code below** into that file.
-6. Scroll down and click the green **"Commit changes"** button.
-
-Once you do that, Vercel will automatically detect the change and "re-deploy" the app. In about 30 seconds, your Vercel link will actually work.
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,78 +15,30 @@ Once you do that, Vercel will automatically detect the change and "re-deploy" th
             --color-d: #FF2D95;
             --color-pbq: #00FFFF;
         }
-
         body, html {
-            margin: 0; padding: 0;
-            width: 100%; height: 100%;
-            background-color: var(--bg-color);
-            color: white;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            overflow: hidden;
-            touch-action: none;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: var(--bg-color); color: white;
+            font-family: -apple-system, sans-serif; overflow: hidden; touch-action: none;
         }
-
-        #app-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* The Progress Bar */
-        #progress-bar {
-            position: absolute;
-            top: 0; left: 0;
-            height: 2px;
-            background: #333;
-            width: 0%;
-            transition: width 0.3s linear;
-            z-index: 100;
-        }
-
-        /* Answer Fields */
-        .answer-block {
-            position: absolute;
-            width: 40%;
-            height: 40%;
-            opacity: 0;
-            transition: opacity 0.5s ease-in;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 84pt;
-            font-weight: bold;
-            pointer-events: none;
-        }
-
-        .top-left { top: 0; left: 0; }
-        .top-right { top: 0; right: 0; }
-        .bottom-left { bottom: 0; left: 0; }
-        .bottom-right { bottom: 0; right: 0; }
-
-        /* Special PBQ Border */
-        #pbq-border {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            border: 10px solid var(--color-pbq);
-            opacity: 0;
-            pointer-events: none;
-            box-sizing: border-box;
-        }
-
-        /* Hidden Camera Stream */
-        #camera-stream {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            opacity: 0;
-        }
-
-        /* Control Panel (Hidden by default) */
-        #controls {
-            position: absolute;
-            bottom: 20px;
-            background: rgba(0,0,0,0.8);
+        #app-container { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        #progress-bar { position: absolute; top: 0; left: 0; height: 3px; background: #333; width: 0%; transition: width 0.3s linear; z-index: 100; }
+        .answer-block { position: absolute; width: 40%; height: 40%; opacity: 0; transition: opacity 0.5s ease-in; display: flex; align-items: center; justify-content: center; font-size: 84pt; font-weight: bold; pointer-events: none; }
+        .top-left { top: 0; left: 0; } .top-right { top: 0; right: 0; } .bottom-left { bottom: 0; left: 0; } .bottom-right { bottom: 0; right: 0; }
+        #pbq-border { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 10px solid var(--color-pbq); opacity: 0; pointer-events: none; box-sizing: border-box; }
+        #camera-stream { position: absolute; width: 1px; height: 1px; opacity: 0; }
+        #setup-menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; padding: 20px; border-radius: 10px; display: none; z-index: 1000; }
+        input { background: #000; color: #fff; border: 1px solid #444; padding: 10px; width: 200px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="progress-bar"></div>
+        <div id="pbq-border"></div>
+        <div class="answer-block top-left" id="block-A">A</div>
+        <div class="answer-block top-right" id="block-B">B</div>
+        <div class="answer-block bottom-left" id="block-C">C</div>
+        <div class="answer-block bottom-right" id="block-D">D</div>
+        <video id="camera-stream" autoplay playsinline></video>
+        
+        <div id="setup-menu">
+            <h3>
