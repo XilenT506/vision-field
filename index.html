@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, {{user}}-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Vision Field</title>
@@ -18,27 +18,30 @@
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
             background-color: var(--bg-color); color: white;
-            font-family: -apple-system, sans-serif; overflow: hidden; touch-action: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden; touch-action: none;
         }
-        #app-container { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
-        #progress-bar { position: absolute; top: 0; left: 0; height: 3px; background: #333; width: 0%; transition: width 0.3s linear; z-index: 100; }
-        .answer-block { position: absolute; width: 40%; height: 40%; opacity: 0; transition: opacity 0.5s ease-in; display: flex; align-items: center; justify-content: center; font-size: 84pt; font-weight: bold; pointer-events: none; }
-        .top-left { top: 0; left: 0; } .top-right { top: 0; right: 0; } .bottom-left { bottom: 0; left: 0; } .bottom-right { bottom: 0; right: 0; }
-        #pbq-border { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 10px solid var(--color-pbq); opacity: 0; pointer-events: none; box-sizing: border-box; }
+        #app-container { 
+            position: relative; width: 100vw; height: 100vh; 
+            display: flex; align-items: center; justify-content: center; 
+        }
+        #standby-text {
+            color: #222;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            user-select: none;
+        }
+        #progress-bar { position: absolute; top: 0; left: 0; height: 3px; background: var(--color-pbq); width: 0%; transition: width 0.3s linear; z-index: 100; }
+        .answer-block { position: absolute; width: 40%; height: 40%; opacity: 0; transition: opacity 0.3s ease-in; display: flex; align-items: center; justify-content: center; font-size: 84pt; font-weight: bold; pointer-events: none; }
+        .top-left { top: 0; left: 0; color: var(--color-a); }
+        .top-right { top: 0; right: 0; color: var(--color-b); }
+        .bottom-left { bottom: 0; left: 0; color: var(--color-c); }
+        .bottom-right { bottom: 0; right: 0; color: var(--color-d); }
+        #pbq-border { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 8px solid var(--color-pbq); opacity: 0; pointer-events: none; box-sizing: border-box; transition: opacity 0.2s; }
         #camera-stream { position: absolute; width: 1px; height: 1px; opacity: 0; }
-        #setup-menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; padding: 20px; border-radius: 10px; display: none; z-index: 1000; }
-        input { background: #000; color: #fff; border: 1px solid #444; padding: 10px; width: 200px; margin-bottom: 10px; }
-    </style>
-</head>
-<body>
-    <div id="app-container">
-        <div id="progress-bar"></div>
-        <div id="pbq-border"></div>
-        <div class="answer-block top-left" id="block-A">A</div>
-        <div class="answer-block top-right" id="block-B">B</div>
-        <div class="answer-block bottom-left" id="block-C">C</div>
-        <div class="answer-block bottom-right" id="block-D">D</div>
-        <video id="camera-stream" autoplay playsinline></video>
-        
-        <div id="setup-menu">
-            <h3>
+        #setup-menu { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            background: #111; border: 1px solid #333; padding: 20px; border-radius: 12px; 
+            display: none; z-index: 1000; width: 80%; max-width: 300px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
