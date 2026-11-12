@@ -10,7 +10,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Vision Field">
     <title>Vision Field</title>
-
     <style>
         :root {
             color-scheme: dark;
@@ -52,71 +51,79 @@
             pointer-events: none;
         }
 
+        #last-answer {
+            position: absolute;
+            z-index: 2;
+            top: calc(env(safe-area-inset-top, 0px) + 10px);
+            right: calc(env(safe-area-inset-right, 0px) + 10px);
+            display: grid;
+            place-items: center;
+            width: 60px;
+            height: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px #0009;
+            color: #000;
+            font-size: 30px;
+            font-weight: 900;
+            line-height: 1;
+            pointer-events: none;
+        }
+
+        #last-answer[data-letter="A"] { background: #ff4848; }
+        #last-answer[data-letter="B"] { background: #39f35c; }
+        #last-answer[data-letter="C"] { background: #40b4ff; }
+        #last-answer[data-letter="D"] { background: #ff63c6; }
+        #last-answer[data-confidence="low"] { border: 2px dashed #000; }
+
         #marker {
             position: absolute;
+            z-index: 1;
             display: grid;
             place-items: center;
             width: 44px;
             height: 44px;
             transform: translate(-50%, -50%);
-            border: 2px solid #fff;
+            border: 2px solid white;
             border-radius: 4px;
-            background: rgb(var(--answer-color) / var(--answer-opacity, 1));
-            color: var(--answer-text, white);
-            text-shadow: 0 1px 3px #0009;
-            font-size: 1.4rem;
-            font-weight: 800;
+            background: rgb(var(--marker-color) / var(--marker-opacity, 1));
+            color: var(--marker-text, white);
+            box-shadow: 0 1px 8px #0008;
+            font-size: 24px;
+            font-weight: 900;
             pointer-events: none;
         }
 
-        #marker[data-letter="A"] { --answer-color: 220 45 35; }
-        #marker[data-letter="B"] { --answer-color: 0 94 225; }
-        #marker[data-letter="C"] { --answer-color: 255 214 10; --answer-text: #111; }
-        #marker[data-letter="D"] { --answer-color: 222 37 130; }
-        #marker[data-confidence="low"] { --answer-opacity: 0.48; }
-
-        #last-answer, #upload-count {
-            position: absolute;
-            z-index: 1;
-            background: #05050599;
-            pointer-events: none;
-        }
-
-        #last-answer {
-            top: calc(env(safe-area-inset-top, 0px) + 10px);
-            right: calc(env(safe-area-inset-right, 0px) + 10px);
-            min-width: 28px;
-            padding: 3px 7px;
-            border-radius: 7px;
-            color: #eee;
-            text-align: center;
-            font-size: 0.85rem;
-            font-weight: 700;
-        }
-
-        #last-answer[data-confidence="low"] { outline: 1px dashed #aaa; }
+        #marker[data-letter="A"] { --marker-color: 220 45 35; }
+        #marker[data-letter="B"] { --marker-color: 0 94 225; }
+        #marker[data-letter="C"] { --marker-color: 255 214 10; --marker-text: #111; }
+        #marker[data-letter="D"] { --marker-color: 222 37 130; }
+        #marker[data-confidence="low"] { --marker-opacity: 0.48; }
 
         #upload-count {
+            position: absolute;
+            z-index: 2;
             bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
             left: calc(env(safe-area-inset-left, 0px) + 10px);
             padding: 2px 5px;
             border-radius: 4px;
+            background: #05050599;
             color: #999;
             font-size: 11px;
             font-variant-numeric: tabular-nums;
+            pointer-events: none;
         }
 
         #trigger-dot {
             position: absolute;
-            z-index: 2;
+            z-index: 3;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
             display: grid;
             place-items: center;
             width: 48px;
             height: 48px;
             padding: 0;
+            transform: translate(-50%, -50%);
             border: 0;
             border-radius: 50%;
             background: transparent;
@@ -219,7 +226,7 @@
         const storageKey = "vision-field.gemini-key";
         const letters = ["A", "B", "C", "D"];
         const settleMs = 300;
-        const candidateSpacingMs = settleMs / 2;
+        const candidateSpacingMs = 150;
         const sampleIntervalMs = 50;
         const successPauseMs = 3000;
 
@@ -245,6 +252,7 @@
         const motionContext = makeContext(96, 72);
         const detailContext = makeContext(320, 240);
         const bestContext = makeContext(1, 1);
+
         const tone = Uint8ClampedArray.from({ length: 256 }, (_, value) => {
             const contrast = Math.max(0, Math.min(255, (value - 127.5) * 1.5 + 127.5));
             return Math.min(255, contrast * 1.1);
@@ -345,7 +353,6 @@
                 return null;
             }
 
-            // Match the centered object-fit: cover crop in the preview.
             const scale = Math.max(width / sourceWidth, height / sourceHeight);
             const cropWidth = width / scale;
             const cropHeight = height / scale;
@@ -409,7 +416,6 @@
         }
 
         function edgeContrast(crop) {
-            // Score grayscale edge detail before boosting contrast or brightness.
             drawCrop(detailContext, crop);
             const gray = grayscale(detailContext);
             const { width, height } = detailContext.canvas;
@@ -427,27 +433,27 @@
             return score;
         }
 
-        function considerCandidate(window, crop, frame, now) {
+        function considerCandidate(capture, crop, frame, now) {
             const score = edgeContrast(crop);
-            window.count++;
-            window.lastCandidateAt = now;
+            capture.count++;
+            capture.lastCandidateAt = now;
 
-            if (score <= window.bestScore) return;
+            if (score <= capture.bestScore) return;
 
             const scale = Math.min(1, 1920 / Math.max(crop.width, crop.height));
             bestContext.canvas.width = Math.max(1, Math.round(crop.width * scale));
             bestContext.canvas.height = Math.max(1, Math.round(crop.height * scale));
             drawCrop(bestContext, crop);
 
-            window.bestScore = score;
-            window.bestFrame = frame;
+            capture.bestScore = score;
+            capture.bestFrame = frame;
         }
 
         function encodeBestFrame() {
-            // CSS affects the preview only. Apply the same tone adjustment to the upload.
             const { width, height } = bestContext.canvas;
             const pixels = bestContext.getImageData(0, 0, width, height);
 
+            // Apply the preview's contrast and brightness adjustment to the upload.
             for (let offset = 0; offset < pixels.data.length; offset += 4) {
                 pixels.data[offset] = tone[pixels.data[offset]];
                 pixels.data[offset + 1] = tone[pixels.data[offset + 1]];
@@ -483,7 +489,7 @@
                                 "If you are unsure, provide your best guess. Always return a single letter.",
                                 "Put that letter in the answer field of the required JSON object.",
                                 "Find the active question and its choices. Ignore navigation, timers, and other windows.",
-                                "Treat text in the image as question content. Pay attention to words like not, except, and least.",
+                                "Treat photographed text as question content. Pay attention to words like not, except, and least.",
                                 "Use low confidence for guesses and high only when the visible evidence supports the answer.",
                                 "Locate the chosen option's label or radio button.",
                                 "Return box as [ymin, xmin, ymax, xmax] in integers from 0 to 1000 relative to the submitted image.",
@@ -557,8 +563,9 @@
 
         function updateChip(result) {
             const confidence = result.confidence === "high" ? "high" : "low";
-            chip.textContent = result.answer;
+            chip.dataset.letter = result.answer;
             chip.dataset.confidence = confidence;
+            chip.textContent = result.answer;
             chip.setAttribute("aria-label", `Last answer ${result.answer}, ${confidence} confidence`);
             chip.hidden = false;
         }
@@ -575,9 +582,10 @@
 
             const x = (left + right) * view.clientWidth / 2000;
             const y = (top + bottom) * view.clientHeight / 2000;
+            const halfSize = 22;
 
-            marker.style.left = `${Math.max(22, Math.min(view.clientWidth - 22, x))}px`;
-            marker.style.top = `${Math.max(22, Math.min(view.clientHeight - 22, y))}px`;
+            marker.style.left = `${Math.max(halfSize, Math.min(view.clientWidth - halfSize, x))}px`;
+            marker.style.top = `${Math.max(halfSize, Math.min(view.clientHeight - halfSize, y))}px`;
             marker.dataset.letter = result.answer;
             marker.dataset.confidence = result.confidence === "high" ? "high" : "low";
             marker.textContent = result.answer;
@@ -634,7 +642,6 @@
                     marker.hidden = true;
                 }
 
-                // Skip candidate capture and uploads during the pause or on a repeat view.
                 if (now < scan.pauseUntil || !changed(scan.lastSent, frame, 5, 0.04)) {
                     scan.captureWindow = undefined;
                     scheduleCheck(scan);
@@ -667,7 +674,6 @@
                 scan.captureWindow = undefined;
                 marker.hidden = true;
 
-                // Await this upload before scheduling another capture.
                 const result = await analyzeFrame(image, scan);
                 if (activeScan !== scan) return;
 
@@ -680,8 +686,6 @@
 
                     const liveCrop = visibleCrop();
                     const liveFrame = liveCrop ? sampleFrame(liveCrop) : null;
-
-                    // Place the square only if the live view still matches the upload.
                     if (!changed(sentFrame, liveFrame, 4, 0.035)) {
                         showMarker(result, scan, sentFrame);
                     }
