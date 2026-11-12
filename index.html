@@ -16,7 +16,12 @@
             background: #050505;
             color: white;
             font-family: system-ui, sans-serif;
+            --answer-width: clamp(120px, 30vw, 180px);
             --answer-height: clamp(96px, 24vw, 144px);
+            --top-offset: calc(env(safe-area-inset-top, 0px) + 12px);
+            --left-offset: calc(env(safe-area-inset-left, 0px) + 12px);
+            --right-offset: calc(env(safe-area-inset-right, 0px) + 12px);
+            --answer-top: calc(var(--top-offset) + 56px);
         }
 
         * { box-sizing: border-box; }
@@ -37,14 +42,36 @@
             object-fit: contain;
         }
 
+        #top-controls, #bottom-controls {
+            position: absolute;
+            z-index: 2;
+            left: var(--left-offset);
+            right: var(--right-offset);
+            max-width: 480px;
+            margin-inline: auto;
+        }
+
+        #top-controls {
+            top: var(--top-offset);
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        #bottom-controls {
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+        }
+
         #answer {
             position: absolute;
-            top: calc(env(safe-area-inset-top, 0px) + 12px);
-            right: calc(env(safe-area-inset-right, 0px) + 12px);
+            top: var(--answer-top);
+            right: var(--right-offset);
             display: grid;
             place-items: center;
-            width: clamp(120px, 30vw, 180px);
+            width: var(--answer-width);
             height: var(--answer-height);
+            transform-origin: top right;
+            transform: translateY(var(--answer-width)) rotate(90deg);
             border-radius: 18px;
             background: #eee;
             color: #000;
@@ -62,9 +89,9 @@
 
         #status {
             position: absolute;
-            top: calc(env(safe-area-inset-top, 0px) + 22px + var(--answer-height));
-            right: calc(env(safe-area-inset-right, 0px) + 12px);
-            max-width: min(300px, calc(100% - 24px));
+            top: calc(var(--answer-top) + var(--answer-width) + 10px);
+            right: var(--right-offset);
+            max-width: min(300px, calc(100% - var(--left-offset) - var(--right-offset)));
             padding: 6px 9px;
             border-radius: 6px;
             background: #050505e6;
@@ -73,21 +100,7 @@
             pointer-events: none;
         }
 
-        #answer[hidden] + #status {
-            top: calc(env(safe-area-inset-top, 0px) + 12px);
-        }
-
-        #controls {
-            position: absolute;
-            right: calc(env(safe-area-inset-right, 0px) + 12px);
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
-            left: calc(env(safe-area-inset-left, 0px) + 12px);
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            max-width: 480px;
-            margin-inline: auto;
-            gap: 10px;
-        }
+        #answer[hidden] + #status { top: var(--answer-top); }
 
         button {
             min-height: 44px;
@@ -102,13 +115,14 @@
         }
 
         button:disabled { opacity: 0.5; }
+
         button:focus-visible {
             outline: 2px solid white;
             outline-offset: 3px;
         }
 
         #scan {
-            grid-column: 1 / -1;
+            width: 100%;
             min-height: 80px;
             border: 2px solid white;
             border-radius: 16px;
@@ -122,6 +136,8 @@
 
         dialog {
             width: min(24rem, calc(100% - 2rem));
+            max-height: calc(100dvh - 2rem);
+            overflow: auto;
             padding: 1rem;
             border: 1px solid #555;
             border-radius: 12px;
@@ -142,25 +158,24 @@
             font-size: 16px;
         }
 
-        .actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
+        .actions { display: flex; flex-wrap: wrap; gap: 8px; }
         #setup-status:empty { display: none; }
     </style>
 </head>
 <body>
     <main id="view" aria-label="Vision Field">
         <video id="camera" autoplay muted playsinline hidden></video>
+
+        <div id="top-controls">
+            <button id="toggle-camera" type="button">Start camera</button>
+            <button id="setup-button" type="button">Setup</button>
+        </div>
+
         <output id="answer" aria-label="Answer" hidden></output>
         <div id="status" role="status" hidden></div>
 
-        <div id="controls">
+        <div id="bottom-controls">
             <button id="scan" type="button" disabled>Scan now</button>
-            <button id="toggle-camera" type="button">Start camera</button>
-            <button id="setup-button" type="button">Setup</button>
         </div>
     </main>
 
