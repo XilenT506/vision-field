@@ -641,7 +641,7 @@
                     return;
                 }
 
-                if (changed(scan.captureWindow?.reference, frame, 3, 0.025)) {
+                if (changed(scan.captureWindow?.reference, frame, 6, 0.10)) {
                     scan.captureWindow = {
                         reference: frame,
                         startedAt: now,
