@@ -16,6 +16,7 @@
             background: #050505;
             color: white;
             font-family: system-ui, sans-serif;
+            --answer-height: clamp(96px, 24vw, 144px);
         }
 
         * { box-sizing: border-box; }
@@ -42,15 +43,16 @@
             right: calc(env(safe-area-inset-right, 0px) + 12px);
             display: grid;
             place-items: center;
-            width: 60px;
-            height: 40px;
-            border-radius: 10px;
+            width: clamp(120px, 30vw, 180px);
+            height: var(--answer-height);
+            border-radius: 18px;
             background: #eee;
-            color: black;
-            font-size: 30px;
+            color: #000;
+            font-size: clamp(76px, 19vw, 116px);
             font-weight: 900;
             line-height: 1;
             box-shadow: 0 2px 8px #0009;
+            pointer-events: none;
         }
 
         #answer[data-letter="A"] { background: #ff4848; }
@@ -60,7 +62,7 @@
 
         #status {
             position: absolute;
-            top: calc(env(safe-area-inset-top, 0px) + 60px);
+            top: calc(env(safe-area-inset-top, 0px) + 22px + var(--answer-height));
             right: calc(env(safe-area-inset-right, 0px) + 12px);
             max-width: min(300px, calc(100% - 24px));
             padding: 6px 9px;
@@ -68,6 +70,11 @@
             background: #050505e6;
             font-size: 13px;
             overflow-wrap: anywhere;
+            pointer-events: none;
+        }
+
+        #answer[hidden] + #status {
+            top: calc(env(safe-area-inset-top, 0px) + 12px);
         }
 
         #controls {
@@ -75,10 +82,11 @@
             right: calc(env(safe-area-inset-right, 0px) + 12px);
             bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
             left: calc(env(safe-area-inset-left, 0px) + 12px);
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 8px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            max-width: 480px;
+            margin-inline: auto;
+            gap: 10px;
         }
 
         button {
@@ -90,10 +98,27 @@
             color: white;
             font: inherit;
             cursor: pointer;
+            touch-action: manipulation;
         }
 
         button:disabled { opacity: 0.5; }
-        button:focus-visible { outline: 2px solid white; }
+        button:focus-visible {
+            outline: 2px solid white;
+            outline-offset: 3px;
+        }
+
+        #scan {
+            grid-column: 1 / -1;
+            min-height: 80px;
+            border: 2px solid white;
+            border-radius: 16px;
+            background: #f4f4f4;
+            color: #050505;
+            font-size: 26px;
+            font-weight: 900;
+        }
+
+        #scan:active:not(:disabled) { background: #ccc; }
 
         dialog {
             width: min(24rem, calc(100% - 2rem));
@@ -117,6 +142,12 @@
             font-size: 16px;
         }
 
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
         #setup-status:empty { display: none; }
     </style>
 </head>
@@ -127,8 +158,8 @@
         <div id="status" role="status" hidden></div>
 
         <div id="controls">
-            <button id="toggle-camera" type="button">Start camera</button>
             <button id="scan" type="button" disabled>Scan now</button>
+            <button id="toggle-camera" type="button">Start camera</button>
             <button id="setup-button" type="button">Setup</button>
         </div>
     </main>
@@ -139,9 +170,11 @@
             <input id="api-key" type="password" autocomplete="off"
                    autocapitalize="off" spellcheck="false">
             <p id="setup-status" role="status"></p>
-            <button type="submit">Save</button>
-            <button id="forget-key" type="button">Forget key</button>
-            <button id="close-setup" type="button">Close</button>
+            <div class="actions">
+                <button type="submit">Save</button>
+                <button id="forget-key" type="button">Forget key</button>
+                <button id="close-setup" type="button">Close</button>
+            </div>
         </form>
     </dialog>
 
@@ -151,6 +184,7 @@
         const endpoint =
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent";
         const storageKey = "vision-field.gemini-key";
+        const allowedAnswers = ["A", "B", "C", "D", "NONE"];
 
         const video = document.querySelector("#camera");
         const answer = document.querySelector("#answer");
@@ -187,6 +221,7 @@
 
         function openSetup() {
             keyInput.value = "";
+
             try {
                 setupStatus.textContent = localStorage.getItem(storageKey)
                     ? "A key is saved. Leave the field blank to keep it."
@@ -336,7 +371,7 @@
                         responseMimeType: "text/x.enum",
                         responseSchema: {
                             type: "STRING",
-                            enum: ["A", "B", "C", "D", "NONE"]
+                            enum: allowedAnswers
                         }
                     }
                 })
@@ -349,6 +384,7 @@
                 const detail = typeof message === "string"
                     ? message.split(key).join("[redacted]")
                     : "No error details were returned.";
+
                 throw new Error(`Gemini HTTP ${response.status}. ${detail}`);
             }
 
@@ -358,7 +394,7 @@
                 .join("")
                 .trim();
 
-            if (!["A", "B", "C", "D", "NONE"].includes(text)) {
+            if (!allowedAnswers.includes(text)) {
                 throw new Error("Gemini returned no usable answer.");
             }
 
@@ -395,7 +431,6 @@
             try {
                 const image = captureImage();
                 const letter = await getAnswer(image, key, request.signal);
-
                 if (activeRequest !== request) return;
 
                 if (letter === "NONE") {
