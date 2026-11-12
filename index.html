@@ -1,48 +1,479 @@
-<style>
-    #marker {
-        width: 132px;
-        height: 132px;
-        border-width: 3px;
-        border-radius: 10px;
-        font-size: 64px;
-    }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#050505">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Vision Field">
+    <title>Vision Field</title>
 
-    #last-answer[data-confidence="unclear"] {
-        background: #e5e5e5;
-        border: 2px dashed #333;
-    }
-</style>
+    <style>
+        :root {
+            color-scheme: dark;
+            background: #050505;
+            color: white;
+            font-family: system-ui, sans-serif;
+        }
 
-<script>
-    (() => {
+        *, *::before, *::after { box-sizing: border-box; }
+        [hidden] { display: none !important; }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            overscroll-behavior: none;
+        }
+
+        #view {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            background: #050505;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        #camera {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+            filter: contrast(1.5) brightness(1.1);
+            pointer-events: none;
+        }
+
+        #last-answer, #marker {
+            position: absolute;
+            display: grid;
+            place-items: center;
+            font-weight: 900;
+            line-height: 1;
+            pointer-events: none;
+        }
+
+        #last-answer {
+            z-index: 2;
+            top: calc(env(safe-area-inset-top, 0px) + 10px);
+            right: calc(env(safe-area-inset-right, 0px) + 10px);
+            width: 60px;
+            height: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px #0009;
+            color: black;
+            font-size: 30px;
+        }
+
+        #last-answer[data-letter="A"] { background: #ff4848; }
+        #last-answer[data-letter="B"] { background: #39f35c; }
+        #last-answer[data-letter="C"] { background: #40b4ff; }
+        #last-answer[data-letter="D"] { background: #ff63c6; }
+        #last-answer[data-state="unclear"] {
+            background: #e5e5e5;
+            border: 2px dashed #333;
+        }
+
+        #marker {
+            z-index: 1;
+            width: 132px;
+            height: 132px;
+            max-width: 100%;
+            max-height: 100%;
+            transform: translate(-50%, -50%);
+            border: 3px solid white;
+            border-radius: 10px;
+            background: var(--marker-color);
+            color: var(--marker-text, white);
+            box-shadow: 0 1px 8px #0008;
+            font-size: 64px;
+        }
+
+        #marker[data-letter="A"] { --marker-color: #dc2d23; }
+        #marker[data-letter="B"] { --marker-color: #005ee1; }
+        #marker[data-letter="C"] { --marker-color: #ffd60a; --marker-text: #111; }
+        #marker[data-letter="D"] { --marker-color: #de2582; }
+
+        #upload-count {
+            position: absolute;
+            z-index: 2;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+            left: calc(env(safe-area-inset-left, 0px) + 10px);
+            padding: 2px 5px;
+            border-radius: 4px;
+            background: #05050599;
+            color: #999;
+            font-size: 11px;
+            font-variant-numeric: tabular-nums;
+            pointer-events: none;
+        }
+
+        #trigger-dot {
+            position: absolute;
+            z-index: 3;
+            top: 50%;
+            left: 50%;
+            display: grid;
+            place-items: center;
+            width: 48px;
+            height: 48px;
+            padding: 0;
+            transform: translate(-50%, -50%);
+            border: 0;
+            border-radius: 50%;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        #trigger-dot::before {
+            content: "";
+            width: 9px;
+            height: 9px;
+            border: 1px solid #999;
+            border-radius: 50%;
+            background: #333;
+        }
+
+        #trigger-dot[aria-pressed="true"]::before { background: #aaa; }
+        #trigger-dot:focus-visible { outline: 2px solid white; }
+
+        dialog {
+            width: min(24rem, calc(100% - 2rem));
+            max-height: calc(100dvh - 2rem);
+            overflow: auto;
+            padding: 1.25rem;
+            border: 1px solid #555;
+            border-radius: 12px;
+            background: #111;
+            color: white;
+        }
+
+        dialog::backdrop { background: #050505cc; }
+
+        input {
+            display: block;
+            width: 100%;
+            margin: 8px 0 12px;
+            padding: 10px;
+            border: 1px solid #777;
+            border-radius: 6px;
+            font: inherit;
+            font-size: 16px;
+        }
+
+        .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+        dialog button {
+            min-height: 44px;
+            padding: 8px 12px;
+            border: 1px solid #777;
+            border-radius: 8px;
+            background: #222;
+            color: white;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        #setup-status:empty { display: none; }
+    </style>
+</head>
+<body>
+    <main id="view" aria-label="Vision Field">
+        <video id="camera" autoplay muted playsinline hidden aria-hidden="true"></video>
+        <div id="marker" hidden aria-hidden="true"></div>
+        <output id="last-answer" aria-label="Last answer" hidden></output>
+        <output id="upload-count" aria-label="API requests attempted" aria-live="off">0</output>
+        <button id="trigger-dot" type="button"
+                aria-label="Toggle scanning" aria-pressed="false"></button>
+    </main>
+
+    <dialog id="setup" aria-label="Setup">
+        <form id="settings">
+            <label for="api-key">Gemini API key</label>
+            <input id="api-key" type="password" autocomplete="off"
+                   autocapitalize="off" spellcheck="false" required>
+            <p id="setup-status" role="status"></p>
+            <div class="actions">
+                <button type="submit">Save</button>
+                <button id="forget-key" type="button">Forget key</button>
+                <button id="close-setup" type="button">Close</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="notice" aria-label="Scan status" aria-describedby="notice-text">
+        <p id="notice-text"></p>
+        <form method="dialog">
+            <button type="submit">Close</button>
+        </form>
+    </dialog>
+
+    <script>
         "use strict";
 
+        const endpoint =
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent";
+        const storageKey = "vision-field.gemini-key";
+        const letters = ["A", "B", "C", "D"];
+        const settleMs = 300;
+        const candidateSpacingMs = 150;
+        const sampleIntervalMs = 50;
+        const fallbackWaitMs = 1200;
+        const successPauseMs = 3000;
+
+        const view = document.querySelector("#view");
+        const video = document.querySelector("#camera");
+        const marker = document.querySelector("#marker");
+        const chip = document.querySelector("#last-answer");
+        const counter = document.querySelector("#upload-count");
+        const trigger = document.querySelector("#trigger-dot");
+        const setup = document.querySelector("#setup");
+        const keyInput = document.querySelector("#api-key");
+        const setupStatus = document.querySelector("#setup-status");
+        const notice = document.querySelector("#notice");
+        const noticeText = document.querySelector("#notice-text");
+
         const verifiedAnswers = new Map();
-        const originalShowMarker = showMarker;
+        let activeScan;
+        let requestsSent = 0;
+        let taps = [];
 
-        showMarker = function (result, scan, frame) {
-            originalShowMarker(result, scan, frame);
-            if (marker.hidden) return;
+        function makeContext(width, height) {
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            return canvas.getContext("2d", {
+                alpha: false,
+                willReadFrequently: true
+            });
+        }
 
-            const [top, left, bottom, right] = result.box;
-            const x = (left + right) * view.clientWidth / 2000;
-            const y = (top + bottom) * view.clientHeight / 2000;
-            const halfWidth = Math.min(marker.offsetWidth, view.clientWidth) / 2;
-            const halfHeight = Math.min(marker.offsetHeight, view.clientHeight) / 2;
+        const motionContext = makeContext(96, 72);
+        const detailContext = makeContext(320, 240);
+        const bestContext = makeContext(1, 1);
 
-            marker.style.left =
-                `${Math.max(halfWidth, Math.min(view.clientWidth - halfWidth, x))}px`;
-            marker.style.top =
-                `${Math.max(halfHeight, Math.min(view.clientHeight - halfHeight, y))}px`;
-        };
+        const tone = Uint8ClampedArray.from({ length: 256 }, (_, value) => {
+            const contrast = Math.max(0, Math.min(255, (value - 127.5) * 1.5 + 127.5));
+            return Math.min(255, contrast * 1.1);
+        });
 
-        function showUnclear() {
+        function showNotice(message) {
+            noticeText.textContent = message;
+            if (!notice.open) notice.showModal();
+        }
+
+        function stopScan() {
+            const scan = activeScan;
+            activeScan = undefined;
+
+            if (scan) {
+                clearTimeout(scan.timer);
+                scan.controller.abort();
+                scan.stream?.getTracks().forEach((track) => track.stop());
+            }
+
+            taps = [];
+            video.srcObject = null;
+            video.hidden = true;
             marker.hidden = true;
-            delete chip.dataset.letter;
-            chip.dataset.confidence = "unclear";
-            chip.textContent = "?";
-            chip.setAttribute("aria-label", "Answer unclear");
-            chip.hidden = false;
+            trigger.setAttribute("aria-pressed", "false");
+        }
+
+        function openSetup() {
+            stopScan();
+            keyInput.value = "";
+
+            try {
+                setupStatus.textContent = localStorage.getItem(storageKey)
+                    ? "A key is saved on this device."
+                    : "Enter your Google AI Studio key.";
+            } catch {
+                setupStatus.textContent = "Browser storage is unavailable.";
+            }
+
+            if (!setup.open) setup.showModal();
+        }
+
+        view.addEventListener("click", (event) => {
+            if (event.target.closest("button")) {
+                taps = [];
+                return;
+            }
+
+            const now = performance.now();
+            taps = taps.filter((time) => now - time <= 850);
+            taps.push(now);
+
+            if (taps.length === 3) openSetup();
+        });
+
+        view.addEventListener("contextmenu", (event) => event.preventDefault());
+
+        document.querySelector("#settings").addEventListener("submit", (event) => {
+            event.preventDefault();
+            const key = keyInput.value.trim();
+
+            if (!key) {
+                setupStatus.textContent = "Enter your Gemini API key.";
+                return;
+            }
+
+            try {
+                localStorage.setItem(storageKey, key);
+                setup.close();
+            } catch {
+                setupStatus.textContent = "The browser could not save the key.";
+            }
+        });
+
+        document.querySelector("#forget-key").addEventListener("click", () => {
+            try {
+                localStorage.removeItem(storageKey);
+                keyInput.value = "";
+                setupStatus.textContent = "Saved key removed.";
+            } catch {
+                setupStatus.textContent = "The browser could not remove the key.";
+            }
+        });
+
+        document.querySelector("#close-setup").addEventListener("click", () => setup.close());
+        setup.addEventListener("close", () => { keyInput.value = ""; });
+
+        function visibleCrop() {
+            const width = view.clientWidth;
+            const height = view.clientHeight;
+            const sourceWidth = video.videoWidth;
+            const sourceHeight = video.videoHeight;
+
+            if (video.readyState < 2 || !width || !height || !sourceWidth || !sourceHeight) {
+                return null;
+            }
+
+            // Match the centered object-fit: cover crop in the preview.
+            const scale = Math.max(width / sourceWidth, height / sourceHeight);
+            const cropWidth = width / scale;
+            const cropHeight = height / scale;
+
+            return {
+                x: (sourceWidth - cropWidth) / 2,
+                y: (sourceHeight - cropHeight) / 2,
+                width: cropWidth,
+                height: cropHeight,
+                layout: `${width}:${height}:${sourceWidth}:${sourceHeight}`
+            };
+        }
+
+        function drawCrop(context, crop) {
+            context.drawImage(
+                video, crop.x, crop.y, crop.width, crop.height,
+                0, 0, context.canvas.width, context.canvas.height
+            );
+        }
+
+        function grayscale(context) {
+            const { width, height } = context.canvas;
+            const rgba = context.getImageData(0, 0, width, height).data;
+            const gray = new Uint8Array(width * height);
+
+            for (let index = 0; index < gray.length; index++) {
+                const offset = index * 4;
+                gray[index] = Math.round(
+                    0.2126 * rgba[offset] +
+                    0.7152 * rgba[offset + 1] +
+                    0.0722 * rgba[offset + 2]
+                );
+            }
+
+            return gray;
+        }
+
+        function sampleFrame(crop) {
+            drawCrop(motionContext, crop);
+            const gray = grayscale(motionContext);
+            let sum = 0;
+
+            for (const value of gray) sum += value;
+
+            return { gray, mean: sum / gray.length, layout: crop.layout };
+        }
+
+        function changed(previous, current, meanLimit, fractionLimit) {
+            if (!previous || !current || previous.layout !== current.layout) return true;
+
+            const exposureShift = current.mean - previous.mean;
+            let total = 0;
+            let changedPixels = 0;
+
+            for (let index = 0; index < current.gray.length; index++) {
+                const difference = Math.abs(
+                    current.gray[index] - previous.gray[index] - exposureShift
+                );
+                total += difference;
+                if (difference > 20) changedPixels++;
+            }
+
+            const count = current.gray.length;
+            return total / count >= meanLimit || changedPixels / count >= fractionLimit;
+        }
+
+        function edgeContrast(crop) {
+            drawCrop(detailContext, crop);
+            const gray = grayscale(detailContext);
+            const { width, height } = detailContext.canvas;
+            let score = 0;
+
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const index = y * width + x;
+                    const horizontal = gray[index + 1] - gray[index - 1];
+                    const vertical = gray[index + width] - gray[index - width];
+                    score += horizontal * horizontal + vertical * vertical;
+                }
+            }
+
+            return score;
+        }
+
+        function considerCandidate(capture, crop, frame, now) {
+            const score = edgeContrast(crop);
+            capture.count++;
+            capture.lastCandidateAt = now;
+
+            if (score <= capture.bestScore) return;
+
+            const scale = Math.min(1, 1920 / Math.max(crop.width, crop.height));
+            bestContext.canvas.width = Math.max(1, Math.round(crop.width * scale));
+            bestContext.canvas.height = Math.max(1, Math.round(crop.height * scale));
+            drawCrop(bestContext, crop);
+
+            capture.bestScore = score;
+            capture.bestFrame = frame;
+        }
+
+        function encodeBestFrame() {
+            const { width, height } = bestContext.canvas;
+            const pixels = bestContext.getImageData(0, 0, width, height);
+
+            // Apply the same contrast and brightness boost to the uploaded pixels.
+            for (let offset = 0; offset < pixels.data.length; offset += 4) {
+                pixels.data[offset] = tone[pixels.data[offset]];
+                pixels.data[offset + 1] = tone[pixels.data[offset + 1]];
+                pixels.data[offset + 2] = tone[pixels.data[offset + 2]];
+            }
+
+            bestContext.putImageData(pixels, 0, 0);
+            const image = bestContext.canvas.toDataURL("image/jpeg", 0.92).split(",")[1];
+
+            if (!image) throw new Error("Could not encode the camera frame.");
+            return image;
         }
 
         function normalize(text) {
@@ -52,17 +483,14 @@
                     .replace(/[“”]/g, '"')
                     .replace(/\s+/g, " ")
                     .trim()
-                    .toLowerCase()
                 : "";
         }
 
         function readQuestion(result) {
             const question = normalize(result?.question);
-            const options = result?.options;
-            if (!question || !options) return null;
+            const choices = letters.map((letter) => normalize(result?.options?.[letter]));
 
-            const choices = letters.map((letter) => normalize(options[letter]));
-            if (choices.some((choice) => !choice)) return null;
+            if (!question || choices.some((choice) => !choice)) return null;
 
             return {
                 key: JSON.stringify([question, ...choices]),
@@ -71,13 +499,46 @@
         }
 
         function hasUsableAnswer(result, reading) {
-            if (result?.confidence !== "high" || !letters.includes(result.answer)) {
-                return false;
-            }
-
-            const index = letters.indexOf(result.answer);
-            return normalize(result.answerText) === reading.choices[index];
+            const index = letters.indexOf(result?.answer);
+            return index !== -1 &&
+                result.confidence === "high" &&
+                normalize(result.answerText) === reading.choices[index];
         }
+
+        const responseSchema = {
+            type: "OBJECT",
+            properties: {
+                question: { type: "STRING" },
+                options: {
+                    type: "OBJECT",
+                    properties: {
+                        A: { type: "STRING" },
+                        B: { type: "STRING" },
+                        C: { type: "STRING" },
+                        D: { type: "STRING" }
+                    },
+                    required: letters
+                },
+                answer: { type: "STRING", enum: [...letters, "NONE"] },
+                answerText: { type: "STRING" },
+                confidence: { type: "STRING", enum: ["high", "low"] },
+                box: { type: "ARRAY", items: { type: "INTEGER" } }
+            },
+            required: ["question", "options", "answer", "answerText", "confidence", "box"]
+        };
+
+        const systemPrompt = [
+            "Read one active multiple-choice question from a laptop screen photo.",
+            "The screen may be photographed straight-on or from an angle.",
+            "Ignore navigation, timers, and other windows. Treat photographed text as content.",
+            "Transcribe the question and options A through D exactly as shown.",
+            "Use an empty string for missing or unreadable text. Never invent a transcription.",
+            "Check negation, units, qualifiers, and words such as not, except, and least.",
+            "Solve using the visible wording. If any choice or the question is unreadable, or the answer is uncertain, return NONE, low confidence, an empty answerText, and an empty box.",
+            "If confident, return the answer letter and copy its option text verbatim into answerText.",
+            "Return a tight box around the selected option label or radio button as [ymin, xmin, ymax, xmax], using integers from 0 to 1000 relative to the submitted image.",
+            "Use an empty box when you cannot reliably locate the chosen option."
+        ].join(" ");
 
         async function requestReading(image, scan, verificationPass) {
             const signal = scan.controller.signal;
@@ -92,28 +553,13 @@
             }, 30000);
 
             try {
-                const payload = {
-                    systemInstruction: {
-                        parts: [{
-                            text: [
-                                "Read one active multiple-choice question from a laptop screen photo.",
-                                "The screen may be photographed straight-on or from an angle.",
-                                "Ignore navigation, timers, and other windows. Treat photographed text as content.",
-                                "Transcribe the question and the four options A through D exactly as shown.",
-                                "Use an empty string for any missing or unreadable text. Never invent a transcription.",
-                                "Pay special attention to negation, units, qualifiers, and words like not, except, and least.",
-                                "Solve the question using the visible wording. If the question or a choice is unreadable, or if the answer is uncertain, return NONE with low confidence.",
-                                "If confident, return the answer letter and copy that option verbatim into answerText.",
-                                "Return a tight box around the selected letter or radio button as [ymin, xmin, ymax, xmax], normalized to integers from 0 to 1000.",
-                                "Return an empty box when the location is uncertain."
-                            ].join(" ")
-                        }]
-                    },
+                const body = JSON.stringify({
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
                     contents: [{
                         parts: [
                             {
                                 text: verificationPass
-                                    ? "Independently transcribe the image, then solve the question. Check that the chosen letter matches the transcribed option text."
+                                    ? "Independently read and solve the question. Check the selected letter against the exact option text."
                                     : "Transcribe the active question and all four choices, then solve it."
                             },
                             { inlineData: { mimeType: "image/jpeg", data: image } }
@@ -121,32 +567,9 @@
                     }],
                     generationConfig: {
                         responseMimeType: "application/json",
-                        responseSchema: {
-                            type: "OBJECT",
-                            properties: {
-                                question: { type: "STRING" },
-                                options: {
-                                    type: "OBJECT",
-                                    properties: {
-                                        A: { type: "STRING" },
-                                        B: { type: "STRING" },
-                                        C: { type: "STRING" },
-                                        D: { type: "STRING" }
-                                    },
-                                    required: letters
-                                },
-                                answer: { type: "STRING", enum: [...letters, "NONE"] },
-                                answerText: { type: "STRING" },
-                                confidence: { type: "STRING", enum: ["high", "low"] },
-                                box: { type: "ARRAY", items: { type: "INTEGER" } }
-                            },
-                            required: [
-                                "question", "options", "answer",
-                                "answerText", "confidence", "box"
-                            ]
-                        }
+                        responseSchema
                     }
-                };
+                });
 
                 counter.textContent = String(++requestsSent);
 
@@ -156,7 +579,7 @@
                         "Content-Type": "application/json",
                         "x-goog-api-key": scan.key
                     },
-                    body: JSON.stringify(payload),
+                    body,
                     signal: request.signal
                 });
 
@@ -170,11 +593,11 @@
                     const detail = typeof message === "string"
                         ? message.split(scan.key).join("[redacted]")
                         : "Gemini did not provide an error message.";
+
                     throw new Error(`Gemini HTTP ${response.status}. ${detail}`);
                 }
 
-                const parts = data?.candidates?.[0]?.content?.parts ?? [];
-                const text = parts
+                const text = (data?.candidates?.[0]?.content?.parts ?? [])
                     .filter((part) => !part.thought && typeof part.text === "string")
                     .map((part) => part.text)
                     .join("");
@@ -192,23 +615,29 @@
             }
         }
 
-        analyzeFrame = async function (image, scan) {
+        function showUnclear() {
+            marker.hidden = true;
+            delete chip.dataset.letter;
+            chip.dataset.state = "unclear";
+            chip.textContent = "?";
+            chip.setAttribute("aria-label", "Answer unclear");
+            chip.hidden = false;
+        }
+
+        async function verifyAnswer(image, scan) {
             const first = await requestReading(image, scan, false);
             if (activeScan !== scan) return null;
 
             const firstReading = readQuestion(first);
-            if (!firstReading) {
-                showUnclear();
-                return null;
-            }
+            if (!firstReading) return null;
 
             const savedAnswer = verifiedAnswers.get(firstReading.key);
             if (savedAnswer) {
-                // Only reuse coordinates from this image if they match the saved letter.
+                // Only draw a square when this frame locates the cached letter.
                 const box = hasUsableAnswer(first, firstReading) && first.answer === savedAnswer
                     ? first.box
                     : [];
-                return { answer: savedAnswer, confidence: "high", box };
+                return { answer: savedAnswer, box };
             }
 
             showUnclear();
@@ -226,11 +655,231 @@
             }
 
             verifiedAnswers.set(firstReading.key, second.answer);
-            return {
-                answer: second.answer,
-                confidence: "high",
-                box: second.box
+            return { answer: second.answer, box: second.box };
+        }
+
+        function updateChip(answer) {
+            chip.dataset.letter = answer;
+            chip.dataset.state = "verified";
+            chip.textContent = answer;
+            chip.setAttribute("aria-label", `Last verified answer ${answer}`);
+            chip.hidden = false;
+        }
+
+        function showMarker(result, scan, frame) {
+            const box = result.box;
+
+            if (!Array.isArray(box) || box.length !== 4 ||
+                !box.every((value) => Number.isInteger(value) && value >= 0 && value <= 1000)) {
+                return;
+            }
+
+            const [top, left, bottom, right] = box;
+            if (bottom <= top || right <= left) return;
+
+            const width = view.clientWidth;
+            const height = view.clientHeight;
+            const x = (left + right) * width / 2000;
+            const y = (top + bottom) * height / 2000;
+            const halfWidth = Math.min(66, width / 2);
+            const halfHeight = Math.min(66, height / 2);
+
+            marker.style.left = `${Math.max(halfWidth, Math.min(width - halfWidth, x))}px`;
+            marker.style.top = `${Math.max(halfHeight, Math.min(height - halfHeight, y))}px`;
+            marker.dataset.letter = result.answer;
+            marker.textContent = result.answer;
+            marker.hidden = false;
+            scan.markerFrame = frame;
+        }
+
+        function failScan(scan, error) {
+            if (activeScan !== scan) return;
+            stopScan();
+
+            if (error?.name === "NotAllowedError") {
+                showNotice("Camera access was denied. Allow it in your browser settings.");
+            } else if (error?.name === "NotFoundError") {
+                showNotice("No camera was found.");
+            } else if (error?.name === "NotReadableError") {
+                showNotice("The camera is unavailable. Close other apps using it and try again.");
+            } else if (error?.name === "TypeError") {
+                showNotice("The scan could not complete. Check your connection and try again.");
+            } else {
+                showNotice(error?.message || "Scanning failed.");
+            }
+        }
+
+        function scheduleCheck(scan) {
+            if (activeScan === scan) {
+                scan.timer = setTimeout(() => checkFrame(scan), sampleIntervalMs);
+            }
+        }
+
+        async function checkFrame(scan) {
+            if (activeScan !== scan) return;
+
+            try {
+                const crop = visibleCrop();
+                const now = performance.now();
+
+                if (!crop) {
+                    marker.hidden = true;
+                    scan.captureWindow = undefined;
+                    scan.captureWaitStartedAt = undefined;
+
+                    if (now - scan.lastFrameAt > 8000) {
+                        throw new Error("The camera preview did not produce a readable frame.");
+                    }
+
+                    scheduleCheck(scan);
+                    return;
+                }
+
+                scan.lastFrameAt = now;
+                const frame = sampleFrame(crop);
+
+                if (!marker.hidden && changed(scan.markerFrame, frame, 4, 0.035)) {
+                    marker.hidden = true;
+                }
+
+                const repeatedView = !changed(scan.lastSent, frame, 5, 0.04);
+                if (now < scan.pauseUntil || repeatedView) {
+                    scan.captureWindow = undefined;
+                    scan.captureWaitStartedAt = undefined;
+                    scheduleCheck(scan);
+                    return;
+                }
+
+                // Keep the fallback deadline across movement resets.
+                scan.captureWaitStartedAt ??= now;
+                const fallback = now - scan.captureWaitStartedAt >= fallbackWaitMs;
+                const captureMoved = changed(scan.captureWindow?.reference, frame, 6, 0.10);
+
+                if (!scan.captureWindow ||
+                    scan.captureWindow.reference.layout !== frame.layout ||
+                    (!fallback && captureMoved)) {
+                    scan.captureWindow = {
+                        reference: frame,
+                        startedAt: now,
+                        lastCandidateAt: -Infinity,
+                        count: 0,
+                        bestScore: -Infinity
+                    };
+                }
+
+                const capture = scan.captureWindow;
+                if (capture.count < 3 && now - capture.lastCandidateAt >= candidateSpacingMs) {
+                    considerCandidate(capture, crop, frame, now);
+                }
+
+                if (capture.count < 3 || now - capture.startedAt < settleMs) {
+                    scheduleCheck(scan);
+                    return;
+                }
+
+                const sentFrame = capture.bestFrame;
+                const image = encodeBestFrame();
+
+                scan.lastSent = sentFrame;
+                scan.captureWindow = undefined;
+                scan.captureWaitStartedAt = undefined;
+                marker.hidden = true;
+
+                const result = await verifyAnswer(image, scan);
+                if (activeScan !== scan) return;
+
+                if (result) {
+                    updateChip(result.answer);
+                    scan.pauseUntil = performance.now() + successPauseMs;
+
+                    const liveCrop = visibleCrop();
+                    const liveFrame = liveCrop ? sampleFrame(liveCrop) : null;
+
+                    if (!changed(sentFrame, liveFrame, 4, 0.035)) {
+                        showMarker(result, scan, sentFrame);
+                    }
+                } else {
+                    showUnclear();
+                }
+
+                scheduleCheck(scan);
+            } catch (error) {
+                failScan(scan, error);
+            }
+        }
+
+        trigger.addEventListener("click", async () => {
+            if (activeScan) {
+                stopScan();
+                return;
+            }
+
+            let key;
+            try {
+                key = localStorage.getItem(storageKey)?.trim();
+            } catch {
+                showNotice("Browser storage is unavailable.");
+                return;
+            }
+
+            if (!key) {
+                openSetup();
+                return;
+            }
+
+            if (!navigator.mediaDevices?.getUserMedia) {
+                showNotice("Open Vision Field over HTTPS in a browser with camera access.");
+                return;
+            }
+
+            const scan = {
+                key,
+                controller: new AbortController(),
+                pauseUntil: 0
             };
-        };
-    })();
-</script>
+
+            activeScan = scan;
+            trigger.setAttribute("aria-pressed", "true");
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                        facingMode: { ideal: "environment" },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+
+                if (activeScan !== scan) {
+                    stream.getTracks().forEach((track) => track.stop());
+                    return;
+                }
+
+                scan.stream = stream;
+                for (const track of stream.getVideoTracks()) {
+                    track.addEventListener("ended", () => {
+                        failScan(scan, new Error("The camera stopped. Tap the dot to reconnect."));
+                    }, { once: true });
+                }
+
+                video.srcObject = stream;
+                video.hidden = false;
+                scan.lastFrameAt = performance.now();
+
+                const playback = video.play();
+                scheduleCheck(scan);
+                await playback;
+            } catch (error) {
+                failScan(scan, error);
+            }
+        });
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) stopScan();
+        });
+
+        window.addEventListener("pagehide", stopScan);
+    </script>
+</body>
+</html>
