@@ -10,6 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Vision Field">
     <title>Vision Field</title>
+
     <style>
         :root {
             color-scheme: dark;
@@ -51,22 +52,25 @@
             pointer-events: none;
         }
 
-        #last-answer {
+        #last-answer, #marker {
             position: absolute;
+            display: grid;
+            place-items: center;
+            font-weight: 900;
+            line-height: 1;
+            pointer-events: none;
+        }
+
+        #last-answer {
             z-index: 2;
             top: calc(env(safe-area-inset-top, 0px) + 10px);
             right: calc(env(safe-area-inset-right, 0px) + 10px);
-            display: grid;
-            place-items: center;
             width: 60px;
             height: 40px;
             border-radius: 10px;
             box-shadow: 0 2px 8px #0009;
             color: #000;
             font-size: 30px;
-            font-weight: 900;
-            line-height: 1;
-            pointer-events: none;
         }
 
         #last-answer[data-letter="A"] { background: #ff4848; }
@@ -76,10 +80,7 @@
         #last-answer[data-confidence="low"] { border: 2px dashed #000; }
 
         #marker {
-            position: absolute;
             z-index: 1;
-            display: grid;
-            place-items: center;
             width: 44px;
             height: 44px;
             transform: translate(-50%, -50%);
@@ -89,8 +90,6 @@
             color: var(--marker-text, white);
             box-shadow: 0 1px 8px #0008;
             font-size: 24px;
-            font-weight: 900;
-            pointer-events: none;
         }
 
         #marker[data-letter="A"] { --marker-color: 220 45 35; }
@@ -228,6 +227,7 @@
         const settleMs = 300;
         const candidateSpacingMs = 150;
         const sampleIntervalMs = 50;
+        const fallbackWaitMs = 1200;
         const successPauseMs = 3000;
 
         const view = document.querySelector("#view");
@@ -308,6 +308,7 @@
             const now = performance.now();
             taps = taps.filter((time) => now - time <= 850);
             taps.push(now);
+
             if (taps.length === 3) openSetup();
         });
 
@@ -392,7 +393,9 @@
             drawCrop(motionContext, crop);
             const gray = grayscale(motionContext);
             let sum = 0;
+
             for (const value of gray) sum += value;
+
             return { gray, mean: sum / gray.length, layout: crop.layout };
         }
 
@@ -407,6 +410,7 @@
                 const difference = Math.abs(
                     current.gray[index] - previous.gray[index] - exposureShift
                 );
+
                 total += difference;
                 if (difference > 20) changedPixels++;
             }
@@ -453,7 +457,7 @@
             const { width, height } = bestContext.canvas;
             const pixels = bestContext.getImageData(0, 0, width, height);
 
-            // Apply the preview's contrast and brightness adjustment to the upload.
+            // Apply the preview's contrast and brightness to the actual upload.
             for (let offset = 0; offset < pixels.data.length; offset += 4) {
                 pixels.data[offset] = tone[pixels.data[offset]];
                 pixels.data[offset + 1] = tone[pixels.data[offset + 1]];
@@ -461,8 +465,10 @@
             }
 
             bestContext.putImageData(pixels, 0, 0);
+
             const image = bestContext.canvas.toDataURL("image/jpeg", 0.92).split(",")[1];
             if (!image) throw new Error("Could not encode the camera frame.");
+
             return image;
         }
 
@@ -539,6 +545,7 @@
                     const detail = typeof message === "string"
                         ? message.split(scan.key).join("[redacted]")
                         : "Gemini did not provide an error message.";
+
                     throw new Error(`Gemini HTTP ${response.status}. ${detail}`);
                 }
 
@@ -563,6 +570,7 @@
 
         function updateChip(result) {
             const confidence = result.confidence === "high" ? "high" : "low";
+
             chip.dataset.letter = result.answer;
             chip.dataset.confidence = confidence;
             chip.textContent = result.answer;
@@ -572,6 +580,7 @@
 
         function showMarker(result, scan, frame) {
             const box = result.box;
+
             if (!Array.isArray(box) || box.length !== 4 ||
                 !box.every((value) => Number.isInteger(value) && value >= 0 && value <= 1000)) {
                 return;
@@ -626,9 +635,10 @@
                 if (!crop) {
                     marker.hidden = true;
                     scan.captureWindow = undefined;
+                    scan.captureWaitStartedAt = undefined;
 
                     if (now - scan.lastFrameAt > 8000) {
-                        throw new Error("The camera did not produce a frame.");
+                        throw new Error("The camera preview did not produce a readable frame.");
                     }
 
                     scheduleCheck(scan);
@@ -642,13 +652,21 @@
                     marker.hidden = true;
                 }
 
-                if (now < scan.pauseUntil || !changed(scan.lastSent, frame, 5, 0.04)) {
+                const repeatedView = !changed(scan.lastSent, frame, 5, 0.04);
+                if (now < scan.pauseUntil || repeatedView) {
                     scan.captureWindow = undefined;
+                    scan.captureWaitStartedAt = undefined;
                     scheduleCheck(scan);
                     return;
                 }
 
-                if (changed(scan.captureWindow?.reference, frame, 6, 0.10)) {
+                // Keep this timer across motion resets. After the deadline,
+                // finish the current three-frame capture even if the view moves.
+                scan.captureWaitStartedAt ??= now;
+                const fallback = now - scan.captureWaitStartedAt >= fallbackWaitMs;
+                const captureMoved = changed(scan.captureWindow?.reference, frame, 6, 0.10);
+
+                if (!scan.captureWindow || (!fallback && captureMoved)) {
                     scan.captureWindow = {
                         reference: frame,
                         startedAt: now,
@@ -670,7 +688,9 @@
 
                 const sentFrame = capture.bestFrame;
                 const image = encodeBestFrame();
+
                 scan.lastSent = sentFrame;
+                scan.captureWaitStartedAt = undefined;
                 scan.captureWindow = undefined;
                 marker.hidden = true;
 
@@ -686,6 +706,7 @@
 
                     const liveCrop = visibleCrop();
                     const liveFrame = liveCrop ? sampleFrame(liveCrop) : null;
+
                     if (!changed(sentFrame, liveFrame, 4, 0.035)) {
                         showMarker(result, scan, sentFrame);
                     }
@@ -705,7 +726,7 @@
 
             let key;
             try {
-                key = localStorage.getItem(storageKey);
+                key = localStorage.getItem(storageKey)?.trim();
             } catch {
                 showNotice("Browser storage is unavailable.");
                 return;
@@ -721,7 +742,12 @@
                 return;
             }
 
-            const scan = { key, controller: new AbortController(), pauseUntil: 0 };
+            const scan = {
+                key,
+                controller: new AbortController(),
+                pauseUntil: 0
+            };
+
             activeScan = scan;
             trigger.setAttribute("aria-pressed", "true");
 
