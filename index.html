@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#050505">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -16,12 +17,22 @@
             background: #050505;
             color: white;
             font-family: system-ui, sans-serif;
-            --answer-width: clamp(120px, 30vw, 180px);
-            --answer-height: clamp(96px, 24vw, 144px);
-            --top-offset: calc(env(safe-area-inset-top, 0px) + 12px);
-            --left-offset: calc(env(safe-area-inset-left, 0px) + 12px);
-            --right-offset: calc(env(safe-area-inset-right, 0px) + 12px);
-            --answer-top: calc(var(--top-offset) + 56px);
+
+            --top: calc(env(safe-area-inset-top, 0px) + 12px);
+            --bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+            --left: calc(env(safe-area-inset-left, 0px) + 12px);
+            --right: calc(env(safe-area-inset-right, 0px) + 12px);
+            --answer-top: calc(var(--top) + 56px);
+
+            /* The badge's width becomes its height after rotation. */
+            --answer-width: min(
+                clamp(240px, 60vw, 360px),
+                max(0px, calc(100dvh - var(--answer-top) - var(--bottom) - 96px))
+            );
+            --answer-height: min(
+                clamp(192px, 48vw, 288px),
+                max(0px, calc(100dvw - var(--left) - var(--right)))
+            );
         }
 
         * { box-sizing: border-box; }
@@ -45,40 +56,42 @@
         #top-controls, #bottom-controls {
             position: absolute;
             z-index: 2;
-            left: var(--left-offset);
-            right: var(--right-offset);
+            left: var(--left);
+            right: var(--right);
             max-width: 480px;
             margin-inline: auto;
         }
 
         #top-controls {
-            top: var(--top-offset);
+            top: var(--top);
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
         }
 
-        #bottom-controls {
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
-        }
+        #bottom-controls { bottom: var(--bottom); }
 
         #answer {
             position: absolute;
             top: var(--answer-top);
-            right: var(--right-offset);
+            right: var(--right);
             display: grid;
             place-items: center;
             width: var(--answer-width);
             height: var(--answer-height);
             transform-origin: top right;
             transform: translateY(var(--answer-width)) rotate(90deg);
-            border-radius: 18px;
+            border-radius: 24px;
             background: #eee;
             color: #000;
-            font-size: clamp(76px, 19vw, 116px);
+            font-size: min(
+                clamp(152px, 38vw, 232px),
+                calc(var(--answer-width) * 0.8),
+                calc(var(--answer-height) * 0.85)
+            );
             font-weight: 900;
             line-height: 1;
-            box-shadow: 0 2px 8px #0009;
+            box-shadow: 0 3px 12px #0009;
             pointer-events: none;
         }
 
@@ -89,9 +102,9 @@
 
         #status {
             position: absolute;
-            top: calc(var(--answer-top) + var(--answer-width) + 10px);
-            right: var(--right-offset);
-            max-width: min(300px, calc(100% - var(--left-offset) - var(--right-offset)));
+            top: calc(var(--answer-top) + var(--answer-width) + 8px);
+            right: var(--right);
+            max-width: min(300px, calc(100% - var(--left) - var(--right)));
             padding: 6px 9px;
             border-radius: 6px;
             background: #050505e6;
@@ -101,6 +114,22 @@
         }
 
         #answer[hidden] + #status { top: var(--answer-top); }
+
+        @media (max-height: 500px) {
+            #status {
+                top: var(--answer-top);
+                right: calc(var(--right) + var(--answer-height) + 8px);
+                max-width: min(
+                    300px,
+                    calc(100% - var(--left) - var(--right) - var(--answer-height) - 8px)
+                );
+            }
+
+            #answer[hidden] + #status {
+                right: var(--right);
+                max-width: min(300px, calc(100% - var(--left) - var(--right)));
+            }
+        }
 
         button {
             min-height: 44px;
@@ -399,7 +428,6 @@
                 const detail = typeof message === "string"
                     ? message.split(key).join("[redacted]")
                     : "No error details were returned.";
-
                 throw new Error(`Gemini HTTP ${response.status}. ${detail}`);
             }
 
